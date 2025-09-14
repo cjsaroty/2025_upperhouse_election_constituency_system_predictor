@@ -55,7 +55,7 @@
   6. 性別
 
 **特徴量重要度の例（画像をここに貼る）**
-![Random Forestのグラフ](images/random_forest.png)
+![Random Forestのグラフ](image/random_forest.png)
 
 
 **ROC曲線比較（画像をここに貼る）**
