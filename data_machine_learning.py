@@ -35,7 +35,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 # 評価関数
 def evaluate_model(name, y_test, y_pred):
-    print(f"\n=== {name} 評価 ===")
+    print(f"\n*** {name} 評価 ***")
     print("Confusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
     print(f"Accuracy : {accuracy_score(y_test, y_pred):.3f}")
@@ -61,7 +61,7 @@ rf_grid = GridSearchCV(
     estimator=RandomForestClassifier(class_weight='balanced', random_state=42),
     param_grid=rf_param_grid,
     cv=5,
-    scoring='accuracy',  # ← ROC-AUC から Accuracy に変更
+    scoring='accuracy',  
     n_jobs=1
 )
 
@@ -78,7 +78,7 @@ plt.title("ランダムフォレスト特徴量重要度")
 plt.show()
 
 # ユーザー入力による当選確率予測（ランダムフォレスト使用）
-print("\n=== 当選確率予測アプリ ===")
+print("\n*** 当選確率予測アプリ ***")
 name = input("名前を入力してください: ")
 age = int(input("年齢を入力してください: "))
 gender = int(input("性別を入力してください（男性=0, 女性=1）: "))
