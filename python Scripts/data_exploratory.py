@@ -1,6 +1,6 @@
 import pandas as pd
 
-df = pd.read_excel("../Data/2025_upperhouse_election_constituency_system.xlsx", engine="openpyxl")
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system.xlsx", engine="openpyxl")
 
 # 最大行数を None に設定
 pd.set_option("display.max_rows", None)

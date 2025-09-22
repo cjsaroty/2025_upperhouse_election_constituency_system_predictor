@@ -6,7 +6,7 @@ import matplotlib.lines as mlines
 
 sns.set(font=["Meiryo"])
 
-df = pd.read_excel("../Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 
 #基本統計量の確認
 desc = df.describe(include='all')

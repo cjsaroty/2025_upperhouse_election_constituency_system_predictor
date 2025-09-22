@@ -4,7 +4,7 @@ import seaborn as sns
 
 sns.set(font=["Meiryo"])
 
-df = pd.read_excel("../Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 
 # クロス集計
 cross_tab = pd.crosstab(df["性別"], df["当落"])

@@ -4,7 +4,7 @@ import seaborn as sns
 
 sns.set(font=["Meiryo"])
 
-df = pd.read_excel("../Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 
 job_outcome = pd.crosstab(df['職業(分類)'], df['当落'])
 

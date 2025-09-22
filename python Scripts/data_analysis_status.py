@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set(font=["Meiryo"])
 
-df = pd.read_excel("../Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 
 #当選確率とステータス(元職・現職・新人)の関係性
 status = pd.crosstab(df["元現新"], df["当落"])

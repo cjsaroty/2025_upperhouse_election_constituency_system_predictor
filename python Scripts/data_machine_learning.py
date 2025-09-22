@@ -11,7 +11,7 @@ import seaborn as sns
 sns.set(font=["Meiryo"])
 
 # データ読み込み
-df = pd.read_excel("../Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 
 # ラベルエンコーディング
 le_party = LabelEncoder()

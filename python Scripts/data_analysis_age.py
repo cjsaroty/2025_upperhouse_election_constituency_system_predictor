@@ -6,7 +6,7 @@ import matplotlib.lines as mlines
 
 sns.set(font=["Meiryo"])
 
-df = pd.read_excel("../Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 
 #当落ごとに年齢の統計量を集計
 age_stats = df.groupby("当落")["年齢"].agg(["mean", "median", "std"])
