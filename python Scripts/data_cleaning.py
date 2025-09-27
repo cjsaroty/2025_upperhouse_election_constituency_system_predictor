@@ -51,7 +51,7 @@ def categorize_job(job):
         return "金融業"
     elif any(x in job for x in ["音楽","シンガー","ダンス","コメディアン","イベント","プロレス","格闘","YouTuber","作家","スイミングアドバイザー","空手道指導者"]):
         return "芸術・エンタメ・スポーツ"
-    elif any(x in job for x in ["IT","エンジニア","システム","コンサル","中小企業診断士"]):
+    elif any(x in job for x in ["IT","エンジニア","システム"]):
         return "ITエンジニア"
     elif any(x in job for x in ["コンサル","中小企業診断士"]):
         return "コンサルタント"
