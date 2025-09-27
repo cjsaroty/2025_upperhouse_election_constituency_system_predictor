@@ -87,7 +87,7 @@ status = input(f"元現新を入力してください {list(le_status.classes_)}
 seats = int(input("議席数を入力してください: "))
 job = input(f"職業を入力してください {list(le_job.classes_)}: ")
 
-# --- 修正部分 ---
+
 try:
     party_encoded = le_party.transform([party])[0]
     status_encoded = le_status.transform([status])[0]
