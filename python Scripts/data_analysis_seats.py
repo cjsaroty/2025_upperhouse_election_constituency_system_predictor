@@ -17,7 +17,7 @@ plt.figure(figsize=(14,5))  # 横長に変更
 sns.barplot(x=seat_win_rate.index, y=seat_win_rate.values, palette="viridis")
 plt.title('議席数ごとの当選確率', fontsize=14)
 plt.xlabel('議席数')
-plt.ylabel('当選確率 (%)')
+plt.ylabel('当選率 (%)')
 plt.ylim(0,100)
 
 #棒の上に当選率ラベルを表示

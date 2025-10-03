@@ -12,7 +12,7 @@ print(status)
 status_norm = status.div(status.sum(axis=1), axis=0)  # 行ごとに割合
 status_norm.plot(kind='bar', stacked=True, figsize=(8,6), color=["skyblue", "salmon"])
 plt.title("元現新と当落の関係", fontsize=14)
-plt.ylabel("当選率")
+plt.ylabel("当選率(%)")
 plt.xlabel("元現新")
 plt.legend(title="当落")
 plt.xticks(rotation=0)
