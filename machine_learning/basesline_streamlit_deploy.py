@@ -1,7 +1,7 @@
 # app.py
-# 当落予測ダッシュボード（SHAP 統合版）
+# 修正版 — 「当落」が object 型で groupby.mean() が失敗する問題を解消し、
+# 学習時の前処理（CBE で追加された特徴量）と予測時の特徴列整合性を保つよう修正済み。
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import os
@@ -17,13 +17,7 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
-
-# SHAP はオプション（インストールされていない環境でも動くよう try/except）
-try:
-    import shap
-    SHAP_AVAILABLE = True
-except Exception:
-    SHAP_AVAILABLE = False
+import shap
 
 plt.rcParams["font.family"] = "MS Gothic"
 sns.set_style("whitegrid")
@@ -33,6 +27,7 @@ sns.set_style("whitegrid")
 # ---------------------------
 @st.cache_data
 def load_excel(uploaded):
+    # pandas が openpyxl を使って読み込む
     return pd.read_excel(uploaded, engine="openpyxl")
 
 def safe_rename(df):
@@ -53,39 +48,69 @@ def safe_rename(df):
     return df
 
 def coerce_target_series(y):
+    """
+    目的変数 y を安全に数値化する：
+    - 既に数値ならそのまま
+    - '当選','落選','当','落','当選 ', '落選 ' などをマップ
+    - '1','0' の文字を数値に変換
+    - True/False を 1/0 に
+    - 上記で変換できなければ LabelEncoder を使う（最後の手段）
+    戻り値は pandas.Series（数値 or 整数）
+    """
     if pd.api.types.is_numeric_dtype(y):
         return y.astype(float)
+
     y_ser = y.fillna("").astype(str).str.strip()
+
+    # 代表的ラベルのマップ
     mapping = {
         "当選": 1, "落選": 0, "当": 1, "落": 0,
         "合格": 1, "不合格": 0,
         "win": 1, "lose": 0, "W": 1, "L": 0,
         "True": 1, "False": 0, "true": 1, "false": 0
     }
+
+    # 小文字化キー対応等
     mapped = y_ser.map(mapping)
     if mapped.notnull().all():
         return mapped.astype(float)
+
+    # マップで一部しか置換されない場合は、数値文字列を変換
     def try_numeric(val):
         try:
+            # 例えば "1" -> 1.0, "0" -> 0.0
             return float(val)
         except:
             return np.nan
+
     numeric_candidate = y_ser.map(try_numeric)
+    # numeric_candidate が全て NaN でなければそれを採用（混在している場合は元の mapped を優先で併合）
     combined = mapped.copy()
     combined[pd.isna(combined)] = numeric_candidate[pd.isna(combined)]
+
     if combined.notnull().all():
         return combined.astype(float)
+
+    # まだ混在しているなら、当/落が混在しているケースを優先的に map して残りは LabelEncoder
+    # 最後の手段：LabelEncoder
     le = LabelEncoder()
     try:
         encoded = le.fit_transform(y_ser)
         return pd.Series(encoded.astype(float), index=y_ser.index)
     except Exception:
+        # 最終的に 0/1 に分けられない場合はエラーを投げる
         raise ValueError("目的変数を数値に変換できませんでした。'当選/落選' などの形式にしてください。")
 
 def prepare_label_encoders(df, label_cols):
+    """
+    LabelEncoder を各カテゴリ列に適用（文字列・カテゴリ向け）。
+    数値列に対しては何もしない。
+    戻り値: (df_encoded, encoders_dict)
+    """
     encoders = {}
     for col in label_cols:
         if col in df.columns:
+            # 数値列はスキップ（を文字列としてラベル化したくないため）
             if pd.api.types.is_numeric_dtype(df[col]):
                 continue
             le = LabelEncoder()
@@ -95,23 +120,38 @@ def prepare_label_encoders(df, label_cols):
     return df, encoders
 
 def apply_cbe_kfold(X, y, label_cols, n_splits=5, random_state=42):
+    """
+    CatBoostEncoder を k-fold で適用して各カテゴリ列に対応する *_cbe 列を追加する。
+    X（DataFrame）はコピーして返す。
+    戻り値: (X_with_cbe, fitted_cbe_encoder_object)
+    """
     X = X.copy().reset_index(drop=True)
     y = y.reset_index(drop=True)
+    # 有効な label_cols をフィルタ
     valid_label_cols = [c for c in label_cols if c in X.columns]
     if len(valid_label_cols) == 0:
         return X, None
+
     cbe = CatBoostEncoder()
     kf = KFold(n_splits=max(2, int(n_splits)), shuffle=True, random_state=random_state)
     X_cbe = np.zeros((len(X), len(valid_label_cols)))
+
     for tr_idx, va_idx in kf.split(X):
         X_tr, X_va = X.iloc[tr_idx], X.iloc[va_idx]
         y_tr = y.iloc[tr_idx]
+        # fit on train folds
         cbe.fit(X_tr[valid_label_cols], y_tr)
+        # transform validation fold
         transformed = cbe.transform(X_va[valid_label_cols])
+        # transformed may be DataFrame
         X_cbe[va_idx, :] = transformed.values
+
+    # full fit on all data for future transform
     cbe.fit(X[valid_label_cols], y)
+
     for i, col in enumerate(valid_label_cols):
         X[f"{col}_cbe"] = X_cbe[:, i]
+
     return X, cbe
 
 # ---------------------------
@@ -121,9 +161,9 @@ MODEL_DIR = "models"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 # ---------------------------
-# UI設定
+# サイドバー・ヘッダー
 # ---------------------------
-st.set_page_config(layout="wide", page_title="当落予測ダッシュボード (SHAP 統合)")
+st.set_page_config(layout="wide", page_title="当落予測ダッシュボード")
 st.sidebar.title("ナビゲーション")
 page = st.sidebar.radio(
     "ページ選択",
@@ -132,7 +172,7 @@ page = st.sidebar.radio(
 )
 
 # ---------------------------
-# ファイルアップロード
+# 共通：ファイルアップロード
 # ---------------------------
 st.sidebar.write("---")
 uploaded_file = st.sidebar.file_uploader("Excelファイルをアップロード", type=["xlsx"])
@@ -140,6 +180,7 @@ df = None
 if uploaded_file is not None:
     df = load_excel(uploaded_file)
     df = safe_rename(df)
+    # ここで '当落' が存在すれば強制的に数値化しておく（以降どこでも安全に mean() などが使える）
     if "当落" in df.columns:
         try:
             df["当落"] = coerce_target_series(df["当落"])
@@ -147,7 +188,7 @@ if uploaded_file is not None:
             st.error(f"目的変数 '当落' を数値化できませんでした: {e}")
 
 # ---------------------------
-# Overview
+# ページ：Overview
 # ---------------------------
 if page == "Overview":
     st.title("Overview — データ確認")
@@ -164,14 +205,15 @@ if page == "Overview":
         st.dataframe(miss[miss > 0])
 
 # ---------------------------
-# Train Model
+# ページ：Train Model
 # ---------------------------
 elif page == "Train Model":
-    st.title("Train Model — モデル学習（SHAP オプション）")
+    st.title("Train Model — モデル学習")
     if df is None:
         st.info("データをアップロードしてからこちらで学習を実行してください。")
     else:
-        # Label 列候補
+
+        # 🔥 修正ポイント：LabelEncoder 適用対象に 3 つのフラグ列を追加
         label_cols = [
             c for c in [
                 "党派", "元現新", "争点1位", "争点2位", "争点3位",
@@ -181,7 +223,7 @@ elif page == "Train Model":
             if c in df.columns
         ]
 
-        # 目的変数選択
+        # 目的変数
         if "当落" in df.columns:
             default_index = list(df.columns).index("当落")
         else:
@@ -192,12 +234,8 @@ elif page == "Train Model":
             options=[c for c in df.columns],
             index=default_index
         )
-        st.write("目的変数:", target_col)
 
-        # 「新人のみ」フィルタ（チェックボックス）
-        filter_new = False
-        if "元現新" in df.columns:
-            filter_new = st.sidebar.checkbox("新人のみで学習する (元現新 == '新')", value=False)
+        st.write("目的変数:", target_col)
 
         # 特徴量選択
         features = st.multiselect(
@@ -229,43 +267,28 @@ elif page == "Train Model":
         )
         val_frac_for_cbe = st.sidebar.slider("CBE 用 kfold 分割数", 3, 10, 5)
 
-        # SHAP 有無オプション（計算コストが高いので明示的に）
-        shap_option = False
-        if SHAP_AVAILABLE:
-            shap_option = st.sidebar.checkbox("学習後に SHAP を計算・表示する（計算負荷あり）", value=False)
-        else:
-            st.sidebar.write("SHAP がインストールされていません。requirements.txt に 'shap' を追加してください。")
-
         if st.button("前処理＆学習を実行"):
             with st.spinner("前処理中..."):
-                df_train = df.copy()
-                if filter_new:
-                    if "元現新" in df_train.columns:
-                        df_train = df_train[df_train["元現新"].astype(str).str.strip() == "新"].copy()
-                        if df_train.empty:
-                            st.error("新人データが存在しません。")
-                            st.stop()
-                    else:
-                        st.error("'元現新' 列が存在しません。")
-                        st.stop()
+                X = df[features].copy()
+                y = df[target_col].copy()
 
-                X = df_train[features].copy()
-                y = df_train[target_col].copy()
-
+                # 目的変数を安全に数値化
                 try:
                     y = coerce_target_series(y)
                 except Exception as e:
                     st.error(f"目的変数の変換に失敗しました: {e}")
                     st.stop()
 
-                # LabelEncoder 適用
+                # LabelEncoder 適用（カテゴリ列のみ）
                 X, encoders = prepare_label_encoders(X, label_cols)
 
-                # CBE
+                # CBE（k-fold）でカテゴリ特徴を数値化して *_cbe 列を追加
                 X, cbe = apply_cbe_kfold(X, y, label_cols, n_splits=val_frac_for_cbe)
 
+                # 学習に使う最終的な特徴列（CBE で追加された列も含める）
                 features_used = X.columns.tolist()
 
+                # split
                 try:
                     X_train, X_val, y_train, y_val = train_test_split(
                         X, y, test_size=test_size, stratify=y, random_state=42
@@ -274,6 +297,7 @@ elif page == "Train Model":
                     st.error(f"train_test_split に失敗しました（stratify 可能か確認してください）: {e}")
                     st.stop()
 
+                # LightGBM dataset
                 train_data = lgb.Dataset(X_train, label=y_train)
                 valid_data = lgb.Dataset(X_val, label=y_val, reference=train_data)
 
@@ -287,6 +311,7 @@ elif page == "Train Model":
                 }
 
             with st.spinner("LightGBM 学習中..."):
+                # 学習（コールバック方式で early stopping）
                 model = lgb.train(
                     params,
                     train_data,
@@ -298,7 +323,7 @@ elif page == "Train Model":
                     ]
                 )
 
-            # 評価表示
+            # 評価
             y_val_pred_prob = model.predict(X_val)
             y_val_pred = (y_val_pred_prob >= 0.5).astype(int)
             st.subheader("評価（検証データ）")
@@ -312,10 +337,11 @@ elif page == "Train Model":
                 "ROC_AUC": roc_auc_score(y_val, y_val_pred_prob)
             })
 
-            # モデル保存
+            # 保存（モデル + 前処理情報を保存）
             model_name = f"lgb_model_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pkl"
             save_obj = {
                 "model": model,
+                # 保存する特徴量は「実際に学習に渡した列」を保存（CBE 列を含む）
                 "features": features_used,
                 "cbe": cbe,
                 "label_cols": label_cols,
@@ -325,48 +351,11 @@ elif page == "Train Model":
             st.success(f"学習完了。モデルを保存しました: {model_name}")
             st.session_state["latest_model_path"] = os.path.join(MODEL_DIR, model_name)
 
-            # -----------------------
-            # SHAP 計算＆表示（オプション）
-            # -----------------------
-            if shap_option and SHAP_AVAILABLE:
-                with st.spinner("SHAP を計算中（データ量により数分かかることがあります）..."):
-                    try:
-                        # X_val をサンプリング（大きい場合は 500 行に制限）
-                        max_shap = 500
-                        if len(X_val) > max_shap:
-                            X_shap = X_val.sample(n=max_shap, random_state=42)
-                            st.write(f"SHAP はサンプル {max_shap} 行で計算します（表示はサンプル）")
-                        else:
-                            X_shap = X_val
-
-                        explainer = shap.TreeExplainer(model)
-                        shap_values = explainer.shap_values(X_shap)
-                        # shap_values の型はモデル・バージョンで変わる場合がある。ndarray に揃える
-                        if isinstance(shap_values, list):
-                            shap_vals_for_plot = shap_values[0]
-                        else:
-                            shap_vals_for_plot = shap_values
-
-                        st.write("### SHAP Summary Plot（サンプル）")
-                        fig_summary = plt.figure(figsize=(10, 5))
-                        shap.summary_plot(shap_vals_for_plot, X_shap, show=False)
-                        st.pyplot(fig_summary)
-
-                        st.write("### SHAP Bar Plot（平均絶対値）")
-                        fig_bar = plt.figure(figsize=(10, 5))
-                        shap.summary_plot(shap_vals_for_plot, X_shap, plot_type="bar", show=False)
-                        st.pyplot(fig_bar)
-
-                    except Exception as e:
-                        st.error(f"SHAP 計算中にエラーが発生しました: {e}")
-            elif shap_option and not SHAP_AVAILABLE:
-                st.warning("SHAP が見つかりません。requirements.txt に 'shap' を追加してデプロイしてください。")
-
 # ---------------------------
-# Candidate Prediction
+# ページ：Candidate Prediction
 # ---------------------------
 elif page == "Candidate Prediction":
-    st.title("Candidate Prediction — 新規候補の当落予測（SHAP で要因分析）")
+    st.title("Candidate Prediction — 新規候補の当落予測")
 
     model_files = [f for f in os.listdir(MODEL_DIR) if f.endswith(".pkl")]
     model_files.sort(reverse=True)
@@ -377,7 +366,7 @@ elif page == "Candidate Prediction":
     else:
         mdl = joblib.load(os.path.join(MODEL_DIR, selected_model))
         model = mdl["model"]
-        features_used = mdl["features"]
+        features_used = mdl["features"]  # ここは学習時に保存した実際の特徴列
         cbe = mdl.get("cbe", None)
         label_cols = mdl.get("label_cols", [])
         label_encoders = mdl.get("label_encoders", {})
@@ -385,9 +374,14 @@ elif page == "Candidate Prediction":
         st.write("使用モデル:", selected_model)
         st.write("入力フォームに値を入れてください。")
 
+        # 入力フォーム作成（学習時の元の特徴列名がわからない場合に備え、
+        # 数値っぽい名前は number_input、'性別' などは selectbox、その他は text_input を使う）
         input_data = {}
+        # 学習時に使った特徴列が多い場合、フォームが長くなる点に注意
         for f in features_used:
+            # skip CBE columns (these are generated automatically)
             if f.endswith("_cbe"):
+                # 生成はモデル側で行うのでユーザー入力は不要 — 後で別途作成
                 continue
             if f in ["年齢", "衆参当選回数", "参議院当選回数", "衆議院当選回数", "議席数", "政府規模"]:
                 input_data[f] = st.number_input(f, value=0)
@@ -396,42 +390,41 @@ elif page == "Candidate Prediction":
             else:
                 input_data[f] = st.text_input(f, value="")
 
-        shap_individual = False
-        if SHAP_AVAILABLE:
-            shap_individual = st.checkbox("この候補者の SHAP force plot を表示する (要 shap)", value=False)
-        else:
-            st.write("※ SHAP がインストールされていません。個別要因は表示できません。")
-
         if st.button("予測する"):
+            # DataFrame を作る
             X_new = pd.DataFrame([input_data])
 
-            # LabelEncoder 適用
+            # LabelEncoder を適用（学習時に用いた encoders に合わせる）
             for col, le in label_encoders.items():
                 if col in X_new.columns:
                     try:
                         X_new[col] = le.transform(X_new[col].fillna("nan").astype(str))
                     except Exception:
+                        # 学習時に見たカテゴリでない場合は -1 を入れておく（または 0）
                         X_new[col] = 0
 
-            # CBE 特徴作成
+            # CBE 特徴作成（学習時に fit した cbe があれば transform）
             if cbe is not None and label_cols:
                 for col in label_cols:
                     if col in X_new.columns:
                         try:
+                            # cbe.transform expects DataFrame with label cols
                             transformed = cbe.transform(X_new[[col]])
                             X_new[f"{col}_cbe"] = transformed.iloc[:, 0]
                         except Exception:
                             X_new[f"{col}_cbe"] = 0
                     else:
+                        # 欠けている列は 0 で埋める
                         X_new[f"{col}_cbe"] = 0
 
-            # 整列
+            # 最終的にモデルが期待する列順に整え、足りない列は 0 で補完
             X_new = X_new.reindex(columns=[c for c in features_used if not c.endswith("_cbe")] + [c for c in features_used if c.endswith("_cbe")], fill_value=0)
+            # 注意: モデルは学習時に features_used の順で学習しているはずなので、その順を維持して渡す
             X_new = X_new.reindex(columns=features_used, fill_value=0)
 
+            # モデルによっては predict が (n_samples,) ではなく (n_samples,1) の可能性があるが一般的には (n,)
             try:
-                prob_arr = model.predict(X_new)
-                prob = float(prob_arr[0]) if hasattr(prob_arr, "__len__") else float(prob_arr)
+                prob = model.predict(X_new)[0]
             except Exception as e:
                 st.error(f"モデル予測中にエラーが発生しました: {e}")
                 st.write("入力データ（デバッグ）:")
@@ -441,27 +434,8 @@ elif page == "Candidate Prediction":
             st.metric("当選確率", f"{prob:.3f}")
             st.write("閾値0.5判定:", "当" if prob >= 0.5 else "落")
 
-            # 個別 SHAP 表示（オプション）
-            if shap_individual and SHAP_AVAILABLE:
-                try:
-                    explainer = shap.TreeExplainer(model)
-                    shap_values = explainer.shap_values(X_new)
-                    if isinstance(shap_values, list):
-                        sv = shap_values[0]
-                    else:
-                        sv = shap_values
-
-                    st.subheader("この候補者の SHAP force plot（要 HTML 描画）")
-                    # force_plot を HTML 化して埋め込む
-                    force_html = shap.force_plot(explainer.expected_value, sv, X_new, matplotlib=False)
-                    components.html(force_html.html(), height=300)
-                except Exception as e:
-                    st.error(f"個別 SHAP の作成でエラーが発生しました: {e}")
-            elif shap_individual and not SHAP_AVAILABLE:
-                st.warning("SHAP がインストールされていないため表示できません。")
-
 # ---------------------------
-# Party / Region Analysis
+# ページ：Party / Region Analysis
 # ---------------------------
 elif page == "Party / Region Analysis":
     st.title("Party / Region Analysis — 政党・地域の集計")
@@ -473,6 +447,7 @@ elif page == "Party / Region Analysis":
             options=[c for c in ["党派", "議席数", "地域", "選挙区"] if c in df.columns]
         )
         if st.button("集計実行"):
+            # 当落が数値であることを保証（Overview の読み込み時点で coerce しているはず）
             try:
                 summary = df.groupby(group_by).agg({"当落": ["mean", "count"]})
                 summary.columns = ["当選確率", "候補数"]
@@ -483,7 +458,7 @@ elif page == "Party / Region Analysis":
                 st.error(f"集計に失敗しました: {e}")
 
 # ---------------------------
-# Feature Analysis
+# ページ：Feature Analysis
 # ---------------------------
 elif page == "Feature Analysis":
     st.title("Feature Analysis — 特徴量分析")
@@ -501,23 +476,27 @@ elif page == "Feature Analysis":
             st.pyplot(fig)
 
         st.subheader("カテゴリ別当選率")
+        # カテゴリ列の判定を厳密に（object または unique < 30）
         cat_cols = [c for c in df.columns if (df[c].dtype == object or df[c].nunique() < 30)]
         if len(cat_cols) == 0:
             st.info("カテゴリ列が見つかりません。")
         else:
             chosen_cat = st.selectbox("カテゴリ列を選ぶ", options=cat_cols)
             try:
+                # 当落が数値であることを前提に mean をとる（coerce していれば安全）
                 agg = df.groupby(chosen_cat)["当落"].mean().sort_values(ascending=False)
                 st.dataframe(agg)
                 st.bar_chart(agg)
             except Exception as e:
                 st.error(f"カテゴリ別当選率の計算に失敗しました: {e}")
+                st.write("選択列のデータ型とサンプル:")
                 st.write(df[chosen_cat].head())
+                st.write("当落列の型・サンプル:")
                 st.write(df["当落"].dtype)
                 st.write(df["当落"].head())
 
 # ---------------------------
-# Model Management
+# ページ：Model Management
 # ---------------------------
 elif page == "Model Management":
     st.title("Model Management — モデル管理")
@@ -536,73 +515,3 @@ elif page == "Model Management":
         if st.button("削除"):
             os.remove(path)
             st.success("削除しました。再読み込みしてください。")
-# ---------------------------
-# Newcomer Winning Patterns
-# ---------------------------
-elif page == "Newcomer Winning Patterns":
-    st.title("Newcomer Winning Patterns — 新人の勝ちパターン分析")
-
-    if df is None:
-        st.info("データをアップロードしてください。")
-        st.stop()
-
-    # 元現新フィルタが存在するか確認
-    if "元現新" not in df.columns:
-        st.error("この分析には '元現新' 列が必要です。")
-        st.stop()
-
-    # 新人だけ抽出
-    df_new = df[df["元現新"].astype(str).str.strip() == "新"].copy()
-    if df_new.empty:
-        st.error("新人データが存在しません。")
-        st.stop()
-
-    st.write(f"新人候補データ数: {len(df_new)} 名")
-
-    # 分析対象となるカテゴリ列
-    candidate_cols = [
-        c for c in df_new.columns
-        if (df_new[c].dtype == object or df_new[c].nunique() <= 20)
-        and c not in ["当落", "元現新"]
-    ]
-
-    st.subheader("特徴量ごとの新人当選率（単変量）")
-
-    # 単変量当選率ランキング
-    result_list = []
-    for col in candidate_cols:
-        try:
-            tmp = df_new.groupby(col)["当落"].mean().sort_values(ascending=False)
-            result_list.append((col, tmp))
-        except:
-            continue
-
-    # ランキングを表示
-    for col, series in result_list:
-        st.markdown(f"### 📌 {col} 別 当選率")
-        st.dataframe(series)
-        st.bar_chart(series)
-
-    st.write("---")
-
-    # 多変量の勝ちパターン（2変量組み合わせ）
-    st.subheader("組み合わせ勝ちパターン（多変量：2つの特徴）")
-
-    top_k = st.slider("表示する上位パターン数", 5, 50, 10)
-
-    pattern_rows = []
-    for col1 in candidate_cols:
-        for col2 in candidate_cols:
-            if col1 >= col2:
-                continue
-            try:
-                grp = df_new.groupby([col1, col2])["当落"].mean()
-                grp = grp.reset_index().sort_values("当落", ascending=False)
-                pattern_rows.append((f"{col1} × {col2}", grp.head(top_k)))
-            except:
-                pass
-
-    # 表示（多すぎるので 10組まで）
-    for title, patt in pattern_rows[:10]:
-        st.markdown(f"### 🔥 {title} の勝ちパターン（Top {top_k}）")
-        st.dataframe(patt)
