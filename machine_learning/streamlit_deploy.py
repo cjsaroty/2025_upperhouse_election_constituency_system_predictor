@@ -16,6 +16,7 @@ from sklearn.metrics import (
 )
 import matplotlib.pyplot as plt
 import seaborn as sns
+import shap
 import joblib
 
 # SHAP はオプション（インストールされていない環境でも動くよう try/except）
