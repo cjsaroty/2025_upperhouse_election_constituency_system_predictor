@@ -20,7 +20,7 @@ fig, ax1 = plt.subplots(figsize=(12, 6))
 sns.barplot(x=party_win_rate.index, y=party_win_rate.values, palette="viridis", ax=ax1)
 ax1.yaxis.set_major_formatter(mticker.PercentFormatter(1.0))
 ax1.set_ylim(0, 1)
-ax1.set_ylabel("当選確率 (%)", fontsize=12)
+ax1.set_ylabel("当選率 (%)", fontsize=12)
 
 #棒グラフの値ラベルを付記
 for container in ax1.containers:
