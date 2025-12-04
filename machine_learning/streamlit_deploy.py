@@ -325,42 +325,67 @@ elif page == "Train Model":
             st.success(f"学習完了。モデルを保存しました: {model_name}")
             st.session_state["latest_model_path"] = os.path.join(MODEL_DIR, model_name)
 
-            # -----------------------
-            # SHAP 計算＆表示（オプション）
-            # -----------------------
-            if shap_option and SHAP_AVAILABLE:
-                with st.spinner("SHAP を計算中（データ量により数分かかることがあります）..."):
-                    try:
-                        # X_val をサンプリング（大きい場合は 500 行に制限）
-                        max_shap = 500
-                        if len(X_val) > max_shap:
-                            X_shap = X_val.sample(n=max_shap, random_state=42)
-                            st.write(f"SHAP はサンプル {max_shap} 行で計算します（表示はサンプル）")
-                        else:
-                            X_shap = X_val
+ # -----------------------
+# SHAP 計算＆表示（オプション）
+# -----------------------
+if shap_option and SHAP_AVAILABLE:
+    with st.spinner("SHAP を計算中（データ量により数分かかることがあります）..."):
+        try:
+            # X_val をサンプリング（大きい場合は 500 行に制限）
+            max_shap = 500
+            if len(X_val) > max_shap:
+                X_shap = X_val.sample(n=max_shap, random_state=42)
+                st.write(f"SHAP はサンプル {max_shap} 行で計算します（表示はサンプル）")
+            else:
+                X_shap = X_val
 
-                        explainer = shap.TreeExplainer(model)
-                        shap_values = explainer.shap_values(X_shap)
-                        # shap_values の型はモデル・バージョンで変わる場合がある。ndarray に揃える
-                        if isinstance(shap_values, list):
-                            shap_vals_for_plot = shap_values[0]
-                        else:
-                            shap_vals_for_plot = shap_values
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X_shap)
+            # shap_values の型はモデル・バージョンで変わる場合がある。ndarray に揃える
+            if isinstance(shap_values, list):
+                shap_vals_for_plot = shap_values[0]
+            else:
+                shap_vals_for_plot = shap_values
 
-                        st.write("### SHAP Summary Plot（サンプル）")
-                        fig_summary = plt.figure(figsize=(10, 5))
-                        shap.summary_plot(shap_vals_for_plot, X_shap, show=False)
-                        st.pyplot(fig_summary)
+            # ---------- Summary Plot（サンプル） ----------
+            st.write("### SHAP Summary Plot（サンプル）")
+            # 余白を確保するために図を大きめにして左マージンを広げる
+            fig_summary = plt.figure(figsize=(10, 6))
+            shap.summary_plot(shap_vals_for_plot, X_shap, show=False)
+            # 長い特徴名対策に左マージンを拡張（日本語ラベル向け）
+            try:
+                fig_summary.tight_layout()
+            except Exception:
+                pass
+            # 経験則的に左を広げる（日本語の長い列名が切れるのを防ぐ）
+            try:
+                fig_summary.subplots_adjust(left=0.35)
+            except Exception:
+                pass
+            st.pyplot(fig_summary)
+            plt.close(fig_summary)
 
-                        st.write("### SHAP Bar Plot（平均絶対値）")
-                        fig_bar = plt.figure(figsize=(10, 5))
-                        shap.summary_plot(shap_vals_for_plot, X_shap, plot_type="bar", show=False)
-                        st.pyplot(fig_bar)
+            # ---------- Bar Plot（平均絶対値） ----------
+            st.write("### SHAP Bar Plot（平均絶対値）")
+            # 特徴量数に応じて縦サイズを調整（多いほど縦長に）
+            n_features = X_shap.shape[1] if hasattr(X_shap, "shape") else len(X_shap.columns)
+            height = max(4, min(0.35 * n_features, 20))  # 上限をつける
+            fig_bar = plt.figure(figsize=(10, height))
+            shap.summary_plot(shap_vals_for_plot, X_shap, plot_type="bar", show=False)
+            try:
+                fig_bar.tight_layout()
+            except Exception:
+                pass
+            try:
+                fig_bar.subplots_adjust(left=0.35)
+            except Exception:
+                pass
+            st.pyplot(fig_bar)
+            plt.close(fig_bar)
 
-                    except Exception as e:
-                        st.error(f"SHAP 計算中にエラーが発生しました: {e}")
-            elif shap_option and not SHAP_AVAILABLE:
-                st.warning("SHAP が見つかりません。requirements.txt に 'shap' を追加してデプロイしてください。")
+        except Exception as e:
+            st.error(f"SHAP 計算中にエラーが発生しました: {e}")
+
 
 # ---------------------------
 # Candidate Prediction
