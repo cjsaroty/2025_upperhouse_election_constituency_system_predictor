@@ -4,29 +4,24 @@ import seaborn as sns
 
 sns.set(font=["Meiryo"])
 
-df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
+df = pd.read_excel("../Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 
 job_outcome = pd.crosstab(df['職業(分類)'], df['当落'])
 
 order = [job for job in job_outcome.index if job != 'その他'] + ['その他']
 job_outcome = job_outcome.reindex(order)
 
-# 当選率の計算
+#当選率の折れ線グラフ
 job_outcome['当選率'] = job_outcome['当'] / job_outcome.sum(axis=1)
 
-# 棒グラフに変更
 plt.figure(figsize=(12,6))
-sns.barplot(x=job_outcome.index, y=job_outcome['当選率'], color="skyblue")
-
-# ラベルを追加
-for i, v in enumerate(job_outcome['当選率']):
-    plt.text(i, v + 0.01, f"{v*100:.1f}%", ha='center', va='bottom', fontsize=9)
-
+sns.lineplot(x=job_outcome.index, y=job_outcome['当選率'], marker='o')
 plt.title('職業ごとの当選率')
 plt.xlabel('職業')
 plt.ylabel('当選率')
 plt.ylim(0,1)
 plt.gca().yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{int(y*100)}%'))
 plt.xticks(rotation=45, ha='right')
+plt.grid(True)
 plt.tight_layout()
 plt.show()

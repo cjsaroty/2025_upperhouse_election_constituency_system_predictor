@@ -1,6 +1,6 @@
 import pandas as pd
 
-df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system.xlsx", engine="openpyxl")
+df = pd.read_excel("Data/2025_upperhouse_election_constituency_system.xlsx", engine="openpyxl")
 
 #欠損地の個数を確認
 print(df.isnull().values.any())
@@ -51,7 +51,7 @@ def categorize_job(job):
         return "金融業"
     elif any(x in job for x in ["音楽","シンガー","ダンス","コメディアン","イベント","プロレス","格闘","YouTuber","作家","スイミングアドバイザー","空手道指導者"]):
         return "芸術・エンタメ・スポーツ"
-    elif any(x in job for x in ["IT","エンジニア","システム"]):
+    elif any(x in job for x in ["IT","エンジニア","システム","コンサル","中小企業診断士"]):
         return "ITエンジニア"
     elif any(x in job for x in ["コンサル","中小企業診断士"]):
         return "コンサルタント"
@@ -83,10 +83,10 @@ df["職業(分類)"] = df["職業"].apply(categorize_job)
 df = df.drop(columns=["職業"])
 
 # 新しいExcelファイルとして保存
-df.to_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", index=False)
+df.to_excel("Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", index=False)
 
 # Excelファイルを読み込む
-df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx")
+df = pd.read_excel("Data/2025_upperhouse_election_constituency_system_cleaning.xlsx")
 
 # 確認
 print(df.head(30))

@@ -1,0 +1,3 @@
+C:\Users\frontier-Python>cd "C:\Users\frontier-Python\Desktop\【フロンティア】2025_upperhouse_election_predictor\machine_learning"
+
+streamlit run "【本番】steamlit2.py"
