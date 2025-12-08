@@ -6,10 +6,9 @@ import matplotlib.ticker as mticker
 sns.set(font=["Meiryo"])
 
 # データ読み込み
-df = pd.read_excel(
-    "C:/Users/frontier-Python/Desktop/2025_upperhouse_election_constituency_system_predictor/Data/2025_upperhouse_election_constituency_system_cleaning.xlsx",
-    engine="openpyxl"
-)
+file_path = r"C:\Users\owner\OneDrive\デスクトップ\2025_upperhouse_election_predictor\Data\2025_upperhouse_election_constituency_system_cleaning.xlsx"
+
+df = pd.read_excel(file_path)
 
 # 当落を数値化（当選=1, 落選=0）
 df["当落フラグ"] = df["当落"].map({"当選": 1, "落選": 0, "当": 1, "落": 0})
