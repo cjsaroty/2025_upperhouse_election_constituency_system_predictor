@@ -1,33 +1,20 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import KFold
 from sklearn.preprocessing import LabelEncoder
-from sklearn.ensemble import RandomForestClassifier
+from category_encoders import CatBoostEncoder
+import lightgbm as lgb
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
-import matplotlib
 import matplotlib.pyplot as plt
 
-# ============================
-# 日本語表示対応
-# ============================
-plt.rcParams["font.family"] = "MS Gothic"  # WindowsならMS Gothic、MacならAppleGothicなど
-
-# ============================
-# 争点入力時にNaN表示を回避
-# ============================
+plt.rcParams["font.family"] = "MS Gothic"
 
 # ============================
 # データ読み込み
 # ============================
-df = pd.read_excel(
-    r"C:\Users\owner\OneDrive\デスクトップ\2025_upperhouse_election_predictor\Data\2025_upperhouse_election_constituency_system_cleaning.xlsx",
-    engine="openpyxl"
-)
-
-# 列名の前後スペース削除
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 df.columns = df.columns.str.strip()
 
-# 列名を短くして使いやすくする
 rename_dict = {
     "衆参すべての当選回数": "衆参当選回数",
     "参議院の当選回数": "参議院当選回数",
@@ -37,7 +24,6 @@ rename_dict = {
     "秘書経験の有無(0が秘書経験あり、1が秘書経験なし)": "秘書経験フラグ",
     "地方議会経験の有無(0が地方議会経験あり、1が地方議会経験なし)": "地方議会経験フラグ"
 }
-
 df = df.rename(columns=rename_dict)
 
 # ============================
@@ -45,7 +31,6 @@ df = df.rename(columns=rename_dict)
 # ============================
 label_cols = ["党派", "元現新", "争点1位", "争点2位", "争点3位", "職業(分類)"]
 encoders = {}
-
 for col in label_cols:
     le = LabelEncoder()
     df[col] = le.fit_transform(df[col])
@@ -54,133 +39,83 @@ for col in label_cols:
 df["当落"] = df["当落"].map({"当": 1, "落": 0})
 
 # ============================
-# 説明変数と目的変数
+# 特徴量セット
 # ============================
-X = df[
-    [
-        "性別",
-        "党派",
-        "元現新",
-        "衆参当選回数",
-        "参議院当選回数",
-        "衆議院当選回数",
-        "議席数",
-        "争点1位",
-        "争点2位",
-        "争点3位",
-        "政府規模",
-        "出生地外立候補フラグ",
-        "秘書経験フラグ",
-        "地方議会経験フラグ",
-        "職業(分類)"
-    ]
+features = [
+    "年齢", "性別", "党派", "元現新", "衆参当選回数",
+    "参議院当選回数", "衆議院当選回数", "議席数",
+    "争点1位", "争点2位", "争点3位",
+    "政府規模", "出生地外立候補フラグ",
+    "秘書経験フラグ", "地方議会経験フラグ",
+    "職業(分類)"
 ]
 
-y = df["当落"]
+X = df[features].copy()
+y = df["当落"].copy()
 
 # ============================
-# 学習データとテストデータに分割
+# CatBoost Encoding（KFold Leak防止）
 # ============================
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
-)
+cbe = CatBoostEncoder()
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+X_cbe = np.zeros((len(X), len(label_cols)))
+for tr_idx, va_idx in kf.split(X):
+    X_tr, X_va = X.iloc[tr_idx], X.iloc[va_idx]
+    y_tr = y.iloc[tr_idx]
+    cbe.fit(X_tr[label_cols], y_tr)
+    X_cbe[va_idx, :] = cbe.transform(X_va[label_cols]).values
+
+for i, col in enumerate(label_cols):
+    X[f"{col}_cbe"] = X_cbe[:, i]
 
 # ============================
-# 評価関数
+# LightGBM 過学習パラメータ設定
 # ============================
-def evaluate_model(name, y_test, y_pred):
-    print(f"\n*** {name} 評価 ***")
-    print("Confusion Matrix:")
-    print(confusion_matrix(y_test, y_pred))
-    print(f"Accuracy : {accuracy_score(y_test, y_pred):.3f}")
-    print(f"Precision: {precision_score(y_test, y_pred):.3f}")
-    print(f"Recall   : {recall_score(y_test, y_pred):.3f}")
-    print(f"F1-score : {f1_score(y_test, y_pred):.3f}")
-
-# ============================
-# RandomForest + GridSearch
-# ============================
-rf_param_grid = {
-    "n_estimators": [200, 300],
-    "max_depth": [None, 10],
-    "min_samples_split": [2, 5],
-    "min_samples_leaf": [1, 2],
+params_overfit = {
+    "objective": "binary",
+    "metric": "binary_logloss",
+    "learning_rate": 0.01,
+    "num_leaves": 255,     # 木の容量最大
+    "max_depth": -1,       # 深さ制限なし
+    "min_data_in_leaf": 1, # 葉1サンプルで柔軟に
+    "feature_fraction": 1.0,
+    "bagging_fraction": 1.0,
+    "bagging_freq": 0,
+    "lambda_l1": 0.0,
+    "lambda_l2": 0.0,
+    "class_weight": None,
+    "verbose": -1,
+    "seed": 42
 }
 
-rf_grid = GridSearchCV(
-    estimator=RandomForestClassifier(class_weight="balanced", random_state=42),
-    param_grid=rf_param_grid,
-    scoring="accuracy",
-    cv=5,
-    n_jobs=1,
+train_data = lgb.Dataset(X, y)
+
+model = lgb.train(
+    params_overfit,
+    train_data,
+    num_boost_round=50000,   # 大量のブーストで過学習
 )
 
-rf_grid.fit(X_train, y_train)
-best_rf_model = rf_grid.best_estimator_
-
-y_pred_rf = best_rf_model.predict(X_test)
-evaluate_model("RandomForest (best)", y_test, y_pred_rf)
+# ============================
+# 学習データで予測
+# ============================
+y_pred_prob = model.predict(X)
+y_pred = (y_pred_prob >= 0.5).astype(int)
 
 # ============================
-# 特徴量重要度プロット
+# 評価
 # ============================
-feature_importances = pd.Series(best_rf_model.feature_importances_, index=X.columns)
-feature_importances.sort_values(ascending=True).plot(kind="barh", figsize=(8, 6))
-plt.title("ランダムフォレスト特徴量重要度")
-plt.tight_layout()
+print("\n*** 過学習型 LightGBM 評価（学習データ） ***")
+print(confusion_matrix(y, y_pred))
+print(f"Accuracy : {accuracy_score(y, y_pred):.3f}")
+print(f"Precision: {precision_score(y, y_pred):.3f}")
+print(f"Recall   : {recall_score(y, y_pred):.3f}")
+print(f"F1-score : {f1_score(y, y_pred):.3f}")
+
+# ============================
+# 特徴量重要度
+# ============================
+lgb.plot_importance(model, figsize=(8, 10))
+plt.title("LightGBM Feature Importance (Overfit)")
 plt.show()
-
-# ============================
-# ユーザー入力による予測
-# ============================
-print("\n*** 当選確率予測アプリ（15特徴量） ***")
-
-def get_input(prompt, cast_type=int):
-    return cast_type(input(prompt))
-
-gender = get_input("性別を入力してください（男性=0, 女性=1）: ")
-party = input(f"党派を入力してください {list(encoders['党派'].classes_)}: ")
-status = input(f"元現新を入力してください {list(encoders['元現新'].classes_)}: ")
-
-senkyo_all = get_input("衆参すべての当選回数: ")
-sangiin = get_input("参議院の当選回数: ")
-shugiin = get_input("衆議院の当選回数: ")
-
-seats = get_input("議席数を入力してください: ")
-
-issue1 = input(f"争点1位を入力してください {list(encoders['争点1位'].classes_)}: ")
-issue2 = input(f"争点2位を入力してください {list(encoders['争点2位'].classes_)}: ")
-issue3 = input(f"争点3位を入力してください {list(encoders['争点3位'].classes_)}: ")
-
-gov_scale = get_input("大きな政府(5) 小さな政府(1) の尺度 (1〜5): ")
-birth_flag = get_input("出生地から立候補か?（0=はい,1=いいえ）: ")
-secretary_flag = get_input("秘書経験あり?（0=あり,1=なし）: ")
-local_flag = get_input("地方議会経験あり?（0=あり,1=なし）: ")
-
-job = input(f"職業分類を入力してください {list(encoders['職業(分類)'].classes_)}: ")
-
-# エンコード
-party_encoded = encoders["党派"].transform([party])[0]
-status_encoded = encoders["元現新"].transform([status])[0]
-issue1_encoded = encoders["争点1位"].transform([issue1])[0]
-issue2_encoded = encoders["争点2位"].transform([issue2])[0]
-issue3_encoded = encoders["争点3位"].transform([issue3])[0]
-job_encoded = encoders["職業(分類)"].transform([job])[0]
-
-# DataFrame 作成
-X_input = pd.DataFrame(
-    [[
-        gender, party_encoded, status_encoded, senkyo_all,
-        sangiin, shugiin, seats,
-        issue1_encoded, issue2_encoded, issue3_encoded,
-        gov_scale, birth_flag, secretary_flag, local_flag, job_encoded
-    ]],
-    columns=X.columns
-)
-
-# 予測
-prob = best_rf_model.predict_proba(X_input)[0][1]
-label = "当選" if prob >= 0.5 else "落選"
-
-print(f"\n当選確率：{prob*100:.2f}% → 予測ラベル：{label}")
-print("（使用モデル：ランダムフォレスト）")
