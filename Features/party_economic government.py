@@ -5,11 +5,7 @@ import seaborn as sns
 sns.set(font=["Meiryo"])
 
 # データ読み込み
-df = pd.read_excel(
-    "C:/Users/frontier-Python/Desktop/2025_upperhouse_election_constituency_system_predictor/Data/2025_upperhouse_election_constituency_system_cleaning.xlsx",
-    engine="openpyxl"
-)
-
+df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
 # 政党名をわかりやすく変換（例：略称→フルネーム）
 party_name_mapping = {
     "自民": "自由民主党",
@@ -58,3 +54,6 @@ plt.title("政府規模感と所属政党の関係", fontsize=14, pad=20)
 plt.legend(title="党派", bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
 plt.show()
+
+
+
