@@ -6,6 +6,9 @@ from category_encoders import CatBoostEncoder
 import lightgbm as lgb
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 import matplotlib.pyplot as plt
+import joblib
+import os
+import pickle
 
 plt.rcParams["font.family"] = "MS Gothic"
 
@@ -54,7 +57,7 @@ X = df[features].copy()
 y = df["当落"].copy()
 
 # ============================
-# CatBoost Encoding（KFold Leak防止）
+# CatBoost Encoding
 # ============================
 cbe = CatBoostEncoder()
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
@@ -70,15 +73,15 @@ for i, col in enumerate(label_cols):
     X[f"{col}_cbe"] = X_cbe[:, i]
 
 # ============================
-# LightGBM 過学習パラメータ設定
+# LightGBM パラメータ設定
 # ============================
 params_overfit = {
     "objective": "binary",
     "metric": "binary_logloss",
     "learning_rate": 0.01,
-    "num_leaves": 255,     # 木の容量最大
-    "max_depth": -1,       # 深さ制限なし
-    "min_data_in_leaf": 1, # 葉1サンプルで柔軟に
+    "num_leaves": 255,     
+    "max_depth": -1,       
+    "min_data_in_leaf": 1, 
     "feature_fraction": 1.0,
     "bagging_fraction": 1.0,
     "bagging_freq": 0,
@@ -94,7 +97,7 @@ train_data = lgb.Dataset(X, y)
 model = lgb.train(
     params_overfit,
     train_data,
-    num_boost_round=50000,   # 大量のブーストで過学習
+    num_boost_round=50000,   
 )
 
 # ============================
@@ -106,7 +109,7 @@ y_pred = (y_pred_prob >= 0.5).astype(int)
 # ============================
 # 評価
 # ============================
-print("\n*** 過学習型 LightGBM 評価（学習データ） ***")
+print("\n*** LightGBM 評価（学習データ） ***")
 print(confusion_matrix(y, y_pred))
 print(f"Accuracy : {accuracy_score(y, y_pred):.3f}")
 print(f"Precision: {precision_score(y, y_pred):.3f}")
@@ -117,5 +120,18 @@ print(f"F1-score : {f1_score(y, y_pred):.3f}")
 # 特徴量重要度
 # ============================
 lgb.plot_importance(model, figsize=(8, 10))
-plt.title("LightGBM Feature Importance (Overfit)")
+plt.title("LightGBM Feature Importance")
 plt.show()
+
+model_package = {
+    "model": model,
+    "features": list(X.columns),
+    "label_encoders": encoders,
+    "cbe_cols": label_cols,      
+    "cbe": cbe
+}
+
+# 保存
+joblib.dump(model_package, "./machine_learning/model_package.pkl")
+
+print("モデル保存完了：machine_learning/model_package.pkl")

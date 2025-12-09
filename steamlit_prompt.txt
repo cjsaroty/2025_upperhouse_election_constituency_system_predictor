@@ -1,3 +1,0 @@
-cd "C:\Users\frontier-Python\Desktop\【フロンティア】2025_upperhouse_election_predictor\machine_learning"
-cd C:\Users\owner\OneDrive\デスクトップ\2025_upperhouse_election_predictor\Streamlit
-streamlit run "streamlit_deploy2.py"
