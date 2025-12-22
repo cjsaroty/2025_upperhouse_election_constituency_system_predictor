@@ -19,6 +19,13 @@ import seaborn as sns
 import shap
 import joblib
 
+jp_font = "MS Gothic"
+
+plt.rcParams.update({
+    "font.family": jp_font,
+    "axes.unicode_minus": False
+})
+
 # SHAP はオプション（インストールされていない環境でも動くよう try/except）
 try:
     import shap
@@ -29,7 +36,6 @@ except Exception:
 plt.rcParams["font.family"] = "MS Gothic"
 sns.set_style("whitegrid")
 shap_option = st.sidebar.checkbox("SHAPを表示する")
-
 
 # ---------------------------
 # ユーティリティ
@@ -131,7 +137,7 @@ st.sidebar.title("ナビゲーション")
 page = st.sidebar.radio(
     "ページ選択",
     ["Overview", "Train Model", "Candidate Prediction",
-     "Party / Region Analysis", "Feature Analysis", "Model Management"]
+     "Feature Analysis", "Model Management"]
 )
 
 # ---------------------------
@@ -170,7 +176,7 @@ if page == "Overview":
 # Train Model
 # ---------------------------
 elif page == "Train Model":
-    st.title("Train Model — モデル学習（SHAP オプション）")
+    st.title("Train Model — モデル学習")
     if df is None:
         st.info("データをアップロードしてからこちらで学習を実行してください。")
     else:
@@ -328,7 +334,13 @@ elif page == "Train Model":
             st.success(f"学習完了。モデルを保存しました: {model_name}")
             st.session_state["latest_model_path"] = os.path.join(MODEL_DIR, model_name)
 
- # -----------------------
+            # 学習後（評価表示の直前あたり）
+            st.session_state["model"] = model
+            st.session_state["X_val"] = X_val
+            st.session_state["y_val"] = y_val
+
+
+# -----------------------
 # SHAP 計算＆表示（オプション）
 # -----------------------
 if shap_option and SHAP_AVAILABLE:
@@ -394,7 +406,7 @@ if shap_option and SHAP_AVAILABLE:
 # Candidate Prediction
 # ---------------------------
 elif page == "Candidate Prediction":
-    st.title("Candidate Prediction — 新規候補の当落予測（SHAP で要因分析）")
+    st.title("新規候補の当落予測")
 
     model_files = [f for f in os.listdir(MODEL_DIR) if f.endswith(".pkl")]
     model_files.sort(reverse=True)
@@ -489,28 +501,6 @@ elif page == "Candidate Prediction":
                 st.warning("SHAP がインストールされていないため表示できません。")
 
 # ---------------------------
-# Party / Region Analysis
-# ---------------------------
-elif page == "Party / Region Analysis":
-    st.title("Party / Region Analysis — 政党・地域の集計")
-    if df is None:
-        st.info("データをアップロードしてください。")
-    else:
-        group_by = st.selectbox(
-            "グループ化",
-            options=[c for c in ["党派", "議席数", "地域", "選挙区"] if c in df.columns]
-        )
-        if st.button("集計実行"):
-            try:
-                summary = df.groupby(group_by).agg({"当落": ["mean", "count"]})
-                summary.columns = ["当選確率", "候補数"]
-                summary = summary.sort_values("当選確率", ascending=False)
-                st.dataframe(summary.head(100))
-                st.bar_chart(summary["当選確率"])
-            except Exception as e:
-                st.error(f"集計に失敗しました: {e}")
-
-# ---------------------------
 # Feature Analysis
 # ---------------------------
 elif page == "Feature Analysis":
@@ -564,73 +554,3 @@ elif page == "Model Management":
         if st.button("削除"):
             os.remove(path)
             st.success("削除しました。再読み込みしてください。")
-# ---------------------------
-# Newcomer Winning Patterns
-# ---------------------------
-elif page == "Newcomer Winning Patterns":
-    st.title("Newcomer Winning Patterns — 新人の勝ちパターン分析")
-
-    if df is None:
-        st.info("データをアップロードしてください。")
-        st.stop()
-
-    # 元現新フィルタが存在するか確認
-    if "元現新" not in df.columns:
-        st.error("この分析には '元現新' 列が必要です。")
-        st.stop()
-
-    # 新人だけ抽出
-    df_new = df[df["元現新"].astype(str).str.strip() == "新"].copy()
-    if df_new.empty:
-        st.error("新人データが存在しません。")
-        st.stop()
-
-    st.write(f"新人候補データ数: {len(df_new)} 名")
-
-    # 分析対象となるカテゴリ列
-    candidate_cols = [
-        c for c in df_new.columns
-        if (df_new[c].dtype == object or df_new[c].nunique() <= 20)
-        and c not in ["当落", "元現新"]
-    ]
-
-    st.subheader("特徴量ごとの新人当選率（単変量）")
-
-    # 単変量当選率ランキング
-    result_list = []
-    for col in candidate_cols:
-        try:
-            tmp = df_new.groupby(col)["当落"].mean().sort_values(ascending=False)
-            result_list.append((col, tmp))
-        except:
-            continue
-
-    # ランキングを表示
-    for col, series in result_list:
-        st.markdown(f"### 📌 {col} 別 当選率")
-        st.dataframe(series)
-        st.bar_chart(series)
-
-    st.write("---")
-
-    # 多変量の勝ちパターン（2変量組み合わせ）
-    st.subheader("組み合わせ勝ちパターン（多変量：2つの特徴）")
-
-    top_k = st.slider("表示する上位パターン数", 5, 50, 10)
-
-    pattern_rows = []
-    for col1 in candidate_cols:
-        for col2 in candidate_cols:
-            if col1 >= col2:
-                continue
-            try:
-                grp = df_new.groupby([col1, col2])["当落"].mean()
-                grp = grp.reset_index().sort_values("当落", ascending=False)
-                pattern_rows.append((f"{col1} × {col2}", grp.head(top_k)))
-            except:
-                pass
-
-    # 表示（多すぎるので 10組まで）
-    for title, patt in pattern_rows[:10]:
-        st.markdown(f"### 🔥 {title} の勝ちパターン（Top {top_k}）")
-        st.dataframe(patt)
