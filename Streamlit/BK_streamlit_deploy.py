@@ -1,5 +1,4 @@
-# app.py
-# 当落予測ダッシュボード（SHAP 統合版）
+# 当落予測ダッシュボード
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -341,7 +340,7 @@ elif page == "Train Model":
 
 
 # -----------------------
-# SHAP 計算＆表示（オプション）
+# SHAP 計算＆表示
 # -----------------------
 if shap_option and SHAP_AVAILABLE:
     with st.spinner("SHAP を計算中（データ量により数分かかることがあります）..."):
