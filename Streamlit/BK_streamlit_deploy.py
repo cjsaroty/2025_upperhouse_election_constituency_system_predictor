@@ -400,7 +400,6 @@ if shap_option and SHAP_AVAILABLE:
         except Exception as e:
             st.error(f"SHAP 計算中にエラーが発生しました: {e}")
 
-
 # ---------------------------
 # Candidate Prediction
 # ---------------------------
