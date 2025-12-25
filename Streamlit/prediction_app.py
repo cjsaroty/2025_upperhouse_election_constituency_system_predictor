@@ -51,9 +51,9 @@ with st.form("prediction_form"):
         issue2 = st.selectbox("争点2位", label_encoders["争点2位"].classes_)
         issue3 = st.selectbox("争点3位", label_encoders["争点3位"].classes_)
         gov = st.slider("政府規模（1:小さな政府 / 5:大きな政府）", 1, 5, 3)
-        birth = st.selectbox("出生地外立候補", [0, 1])
-        secretary = st.selectbox("秘書経験なし", [0, 1])
-        local = st.selectbox("地方議会経験なし", [0, 1])
+        birth = st.selectbox("出生地からの立候補(0が出生地からの立候補/1が立候補ではない)", [0, 1])
+        secretary = st.selectbox("秘書経験なし(0が秘書経験あり、1が秘書経験なし)", [0, 1])
+        local = st.selectbox("地方議会経験なし(0が地方議会経験あり、1が地方議会経験なし)", [0, 1])
         job = st.selectbox("職業(分類)", label_encoders["職業(分類)"].classes_)
 
     submit = st.form_submit_button("予測する")
