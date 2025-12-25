@@ -6,7 +6,7 @@ import matplotlib.ticker as mticker
 sns.set(font=["Meiryo"])
 
 # データ読み込み
-file_path = r"C:\Users\owner\OneDrive\デスクトップ\2025_upperhouse_election_predictor\Data\2025_upperhouse_election_constituency_system_cleaning.xlsx"
+file_path = "Data/2025_upperhouse_election_constituency_system_cleaning.xlsx"
 
 df = pd.read_excel(file_path)
 
