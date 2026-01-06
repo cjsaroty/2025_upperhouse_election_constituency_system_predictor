@@ -136,7 +136,7 @@ st.sidebar.title("ナビゲーション")
 page = st.sidebar.radio(
     "ページ選択",
     ["Overview", "Train Model", "Candidate Prediction",
-     "Feature Analysis", "Model Management"]
+    "Feature Analysis", "Model Management"]
 )
 
 # ---------------------------
@@ -224,7 +224,7 @@ elif page == "Train Model":
         # ハイパーパラメータ
         st.sidebar.write("LightGBM ハイパーパラメータ")
         lr = st.sidebar.number_input("learning_rate", min_value=0.0001, max_value=0.5,
-                                     value=0.05, format="%.4f")
+                                    value=0.05, format="%.4f")
         num_leaves = st.sidebar.slider("num_leaves", 8, 512, 64)
         n_estimators = st.sidebar.number_input(
             "num_boost_round 最大",
@@ -436,7 +436,7 @@ elif page == "Candidate Prediction":
 
         shap_individual = False
         if SHAP_AVAILABLE:
-            shap_individual = st.checkbox("この候補者の SHAP force plot を表示する (要 shap)", value=False)
+            shap_individual = st.checkbox("この候補者の SHAP force plot を表示する (要 shap)", value=False)
         else:
             st.write("※ SHAP がインストールされていません。個別要因は表示できません。")
 
