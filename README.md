@@ -16,10 +16,11 @@
 
 ### ■ ライブラリ
 
-* pandas, numpy
+* pandas, numpy, scipy
 * scikit-learn
 * lightgbm
 * matplotlib, seaborn
+* Streamlit
 
 ### ■ 開発環境
 
