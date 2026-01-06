@@ -2,50 +2,109 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.ticker as mticker
+from scipy.stats import chi2_contingency
 
 sns.set(font=["Meiryo"])
 
-# データ読み込み
+# ==================================================
+# 1. データ読み込み
+# ==================================================
 df = pd.read_excel(
-    "C:/Users/frontier-Python/Desktop/2025_upperhouse_election_constituency_system_predictor/Data/2025_upperhouse_election_constituency_system_cleaning.xlsx",
+    "./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx",
     engine="openpyxl"
 )
 
-# 当落を数値化（当選=1, 落選=0）
-df["当落フラグ"] = df["当落"].map({"当選": 1, "落選": 0, "当": 1, "落": 0})
+# ==================================================
+# 2. 当落を数値化（当選=1, 落選=0）
+# ==================================================
+df["当落フラグ"] = df["当落"].map({
+    "当選": 1,
+    "落選": 0,
+    "当": 1,
+    "落": 0
+})
 
-# 衆議院と参議院の当選回数を合算
-df["衆参すべての当選回数"] = df["参議院の当選回数"] + df["衆議院の当選回数"]
+# ==================================================
+# 3. 衆議院＋参議院の当選回数を合算
+# ==================================================
+df["衆参すべての当選回数"] = (
+    df["参議院当選回数"] + df["衆議院当選回数"]
+)
 
-# 過去当選回数ごとの当選率を計算
-win_rate_by_count = df.groupby("衆参すべての当選回数")["当落フラグ"].mean().sort_index()
+# ==================================================
+# 4. クロス集計（衆参すべての当選回数 × 当落）
+# ==================================================
+cross_tab = pd.crosstab(
+    df["衆参すべての当選回数"],
+    df["当落"]
+)
 
-# グラフ描画
+print("\n▼ クロス集計（衆参すべての当選回数 × 当落）")
+print(cross_tab)
+
+# ==================================================
+# 5. カイ二乗検定
+# ==================================================
+chi2, p, dof, expected = chi2_contingency(cross_tab)
+
+print("\n▼ カイ二乗検定結果")
+print(f"χ²値 = {chi2:.3f}")
+print(f"自由度 = {dof}")
+print(f"p値 = {p:.5f}")
+
+alpha = 0.05
+if p < alpha:
+    print("→ 有意差あり（過去の総当選回数と当落は独立ではない）")
+else:
+    print("→ 有意差なし（過去の総当選回数と当落は独立とみなせる）")
+
+# 期待度数（確認用）
+expected_df = pd.DataFrame(
+    expected,
+    index=cross_tab.index,
+    columns=cross_tab.columns
+)
+
+print("\n▼ 期待度数（5未満が多い場合は注意）")
+print(expected_df.round(2))
+
+# ==================================================
+# 6. 当選率の計算（可視化用）
+# ==================================================
+win_rate_by_count = (
+    df.groupby("衆参すべての当選回数")["当落フラグ"]
+      .mean()
+      .sort_index()
+)
+
+# ==================================================
+# 7. 棒グラフ描画（当選確率）
+# ==================================================
 fig, ax = plt.subplots(figsize=(12, 6))
-sns.barplot(x=win_rate_by_count.index, y=win_rate_by_count.values, palette="viridis", ax=ax)
 
-# y軸をパーセント表示
+sns.barplot(
+    x=win_rate_by_count.index,
+    y=win_rate_by_count.values,
+    palette="viridis",
+    ax=ax
+)
+
 ax.yaxis.set_major_formatter(mticker.PercentFormatter(1.0))
-ax.set_ylim(0, 1)
+ax.set_ylim(0, 1.1)
+
 ax.set_xlabel("過去の総当選回数（衆議院＋参議院）", fontsize=12)
 ax.set_ylabel("当選確率 (%)", fontsize=12)
 
-# 棒グラフの値ラベルを追加
+# 値ラベル
 for container in ax.containers:
     labels = [f"{v.get_height()*100:.1f}%" for v in container]
     ax.bar_label(container, labels=labels, padding=2, fontsize=9)
 
-# y軸をパーセント表示
-ax.yaxis.set_major_formatter(mticker.PercentFormatter(1.0))
+plt.title(
+    "過去の総当選回数と当落の関係",
+    fontsize=14,
+    pad=30
+)
 
-# y軸範囲を少し広げて上側にスペースを作る
-ax.set_ylim(0, 1.1)  # 1.0 → 1.1 にすることでグラフ上に余白ができる
-
-# タイトル設定（上側マージンを追加するため pad を指定）
-plt.title("過去の総当選回数と当落の関係", fontsize=14, pad=30)  # pad=30 はタイトルとグラフの間隔をポイントで指定
-
-# レイアウトを調整
 plt.tight_layout()
-
 plt.show()
-

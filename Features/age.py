@@ -1,41 +1,79 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import matplotlib.patches as mpatches
-import matplotlib.lines as mlines
+import numpy as np
+from scipy.stats import chi2_contingency  # 追加
 
 sns.set(font=["Meiryo"])
 
-file_path = r"C:\Users\owner\OneDrive\デスクトップ\2025_upperhouse_election_predictor\Data\2025_upperhouse_election_constituency_system_cleaning.xlsx"
-
+# Excelファイル読み込み
+file_path = "Data/2025_upperhouse_election_constituency_system_cleaning.xlsx"
 df = pd.read_excel(file_path)
 
-#当落ごとに年齢の統計量を集計
-age_stats = df.groupby("当落")["年齢"].agg(["mean", "median", "std"])
-age_stats = age_stats.rename(columns={
-    "mean": "平均年齢",
-    "median": "中央値",
-    "std": "標準偏差"})
+# 当落列の正規化
+df["当落"] = df["当落"].astype(str).str.strip()
 
-#グラフ作成
-fig, ax = plt.subplots(figsize=(6,4))
+# 当選フラグ（当選=1、それ以外=0）
+df["当選フラグ"] = df["当落"].isin(["当選", "当"]).astype(int)
 
-#平均年齢の棒グラフ（標準偏差をエラーバーとして表示）
-ax.bar(age_stats.index, age_stats["平均年齢"], yerr=age_stats["標準偏差"], capsize=1, color=["skyblue","salmon"],width=0.3,label="平均年齢（エラーバー：平均 ±1σ（σ = 標準偏差））")
+# 年齢を30～90歳に制限
+df = df[(df["年齢"] >= 30) & (df["年齢"] <= 90)]
 
-#中央値も線で表示
-ax.plot(age_stats.index, age_stats["中央値"], color='green', marker='o', linestyle='--', label='中央値')
+# ========================
+# ▼ カイ二乗検定
+# 年齢を10歳刻みの年代に変換
+df["年代"] = (df["年齢"] // 10) * 10
 
-#凡例パッチを自作（skyblueとsalmon両方に同じラベル）
-blue_patch = mpatches.Patch(color="skyblue", label="平均年齢（エラーバー：平均 ±1σ（σ = 標準偏差））")
-salmon_patch = mpatches.Patch(color="salmon", label="平均年齢（エラーバー：平均 ±1σ（σ = 標準偏差））")
-median_line = mlines.Line2D([], [], color='green', marker='o', linestyle='--', label='中央値')
+# クロス集計表（年代 × 当選）
+contingency = pd.crosstab(df["年代"], df["当選フラグ"])
+print("▼ クロス集計表（年代 × 当選）")
+print(contingency)
 
-ax.legend(handles=[blue_patch, salmon_patch, median_line], loc="best")
+# χ²検定
+chi2, p, dof, expected = chi2_contingency(contingency)
+print("\n▼ カイ二乗検定結果")
+print(f"χ²値 = {chi2:.3f}")
+print(f"自由度 = {dof}")
+print(f"p値 = {p:.5f}")
 
-# 軸ラベル・タイトル
-ax.set_ylabel("年齢")
-ax.set_title("当落別年齢統計")
+alpha = 0.05
+if p < alpha:
+    print("→ 有意差あり（年齢層と当選は独立ではない）")
+else:
+    print("→ 有意差なし（年齢層と当選は独立とみなせる）")
+# ========================
+
+# 1歳幅
+ages = range(30, 91)
+
+# 年齢ごとの当選確率
+summary = (
+    df.groupby("年齢")["当選フラグ"]
+      .mean()
+      .reindex(ages)
+)
+
+# グラフ作成
+fig, ax = plt.subplots(figsize=(14, 5))
+
+ax.bar(
+    summary.index,
+    summary.values,
+    width=0.8,
+    color="skyblue",
+    edgecolor="black"
+)
+
+# 上側に余白を追加
+ax.set_ylim(0, 1.05)
+
+# 軸・タイトル
+ax.set_xlabel("年齢")
+ax.set_ylabel("当選確率")
+ax.set_title("年齢別 当選確率（1歳幅・30〜90歳）")
+
+ax.set_xticks(range(30, 91, 2))
+ax.grid(axis="y", linestyle="--", alpha=0.7)
 
 plt.tight_layout()
 plt.show()
