@@ -133,5 +133,5 @@ model_package = {
     "cbe": cbe
 }
 
-joblib.dump(model_package, "./machine learning/model_package.pkl")
-print("モデル保存完了：machine learning/model_package.pkl")
+joblib.dump(model_package, "./machine_learning/model_package.pkl")
+print("モデル保存完了：machine_learning/model_package.pkl")

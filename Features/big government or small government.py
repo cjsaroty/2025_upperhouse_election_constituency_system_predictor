@@ -64,6 +64,6 @@ for container in ax.containers:
     ax.bar_label(container, labels=labels, padding=2, fontsize=9)
 
 # タイトル設定
-plt.title("政府の大きさと当選確率の関係", fontsize=14, pad=20)
+plt.title("政府の大きさの志向性と当選確率の関係", fontsize=14, pad=20)
 plt.tight_layout()
 plt.show()
