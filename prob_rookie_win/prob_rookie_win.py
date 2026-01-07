@@ -6,137 +6,153 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
-
-# ==============================
-# 1. データ読み込み
-# ==============================
-# CSVファイル名を指定
-df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
-
-# ===== 列名クリーニング（必須）=====
-df.columns = (
-    df.columns
-    .str.replace(r"\s+", "", regex=True)  # 改行・全角・半角スペース削除
-    .str.replace("（", "(", regex=False)
-    .str.replace("）", ")", regex=False)
-    .str.replace("、", ",", regex=False)
-)
-
-# ==============================
-# 2. 新人候補に限定
-# ==============================
-df_new = df[
-    (df["元現新"] == "新") &
-    (df["衆参すべての当選回数"] == 0) &
-    (df["衆議院当選回数"] == 0) &
-    (df["参議院当選回数"] == 0)
-].copy()
-
-# ==============================
-# 3. 説明変数・目的変数
-# ==============================
-target_col = "当落"   # 当選=1、落選=0
-
-feature_cols = [
-    "年齢",
-    "性別",
-    "党派",
-    "都道府県",
-    "争点1位",
-    "争点2位",
-    "争点3位",
-    "政府規模",
-    "出生地外立候補フラグ",
-    "秘書経験フラグ",
-    "地方議会経験フラグ",
-    "職業(分類)"
-]
+from sklearn.impute import SimpleImputer
 
 
-X = df_new[feature_cols]
-y = df_new[target_col]
-
-# ==============================
-# 4. 数値変数・カテゴリ変数分離
-# ==============================
-numeric_features = [
-    "年齢",
-    "争点1位",
-    "争点2位",
-    "争点3位",
-    "政府規模",
-    "出生地外立候補フラグ",
-    "秘書経験フラグ",
-    "地方議会経験フラグ"
-]
-
-for col in numeric_features:
-    df_new[col] = pd.to_numeric(df_new[col], errors="coerce")
-
-
-
-categorical_features = [
-    "性別",
-    "党派",
-    "都道府県",
-    "職業(分類)"
-]
-
-# ==============================
-# 5. 前処理 + ロジスティック回帰
-# ==============================
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("num", "passthrough", numeric_features),
-        ("cat", OneHotEncoder(drop="first", handle_unknown="ignore"), categorical_features)
-    ]
-)
-
-model = LogisticRegression(max_iter=1000)
-
-pipeline = Pipeline(
-    steps=[
-        ("preprocess", preprocessor),
-        ("model", model)
-    ]
-)
-
-# ==============================
-# 6. 学習・評価
-# ==============================
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.3, random_state=42, stratify=y
-)
-
-pipeline.fit(X_train, y_train)
-
-y_pred = pipeline.predict(X_test)
-print(classification_report(y_test, y_pred))
-
-# ==============================
-# 7. 当選しやすい要因の抽出
-# ==============================
-feature_names = (
-    numeric_features +
-    list(
-        pipeline.named_steps["preprocess"]
-        .named_transformers_["cat"]
-        .get_feature_names_out(categorical_features)
+def load_data():
+    return pd.read_excel(
+        "./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx",
+        engine="openpyxl"
     )
-)
 
-coefficients = pipeline.named_steps["model"].coef_[0]
 
-importance_df = pd.DataFrame({
-    "要因": feature_names,
-    "係数": coefficients
-}).sort_values(by="係数", ascending=False)
+def preprocess(df):
+    df = df[df["元現新"] == "新"].copy()
 
-print("\n=== 新人が当選しやすい要因（正の影響が強い順） ===")
-print(importance_df.head(20))
+    # 当落の正規化
+    df["当落"] = df["当落"].astype(str).str.strip()
+    df.loc[df["当落"].str.contains("当", na=False), "当落"] = 1
+    df.loc[df["当落"].str.contains("落", na=False), "当落"] = 0
+    df["当落"] = pd.to_numeric(df["当落"], errors="coerce")
+    df = df.dropna(subset=["当落"])
+    df["当落"] = df["当落"].astype(int)
 
-print("\n=== 新人が当選しにくい要因（負の影響が強い順） ===")
-print(importance_df.tail(20))
+    # カテゴリ列を文字列化して欠損を「欠損」に置換
+    categorical_features = [
+        "性別",
+        "党派",
+        "都道府県",
+        "争点1位",
+        "争点2位",
+        "争点3位",
+        "政府規模",
+        "出生地外立候補フラグ",
+        "秘書経験フラグ",
+        "地方議会経験フラグ",
+        "職業(分類)",
+    ]
+    for col in categorical_features:
+        df[col] = df[col].astype(str).fillna("欠損")
 
-# CSVとして保存
-importance_df.to_csv("newcomer_winning_factors.csv", index=False)
+    return df
+
+
+
+def build_pipeline():
+    numeric_features = [
+        "年齢",
+        "衆参すべての当選回数",
+        "参議院当選回数",
+        "衆議院当選回数",
+    ]
+
+    categorical_features = [
+        "性別",
+        "党派",
+        "都道府県",
+        "争点1位",
+        "争点2位",
+        "争点3位",
+        "政府規模",
+        "出生地外立候補フラグ",
+        "秘書経験フラグ",
+        "地方議会経験フラグ",
+        "職業(分類)",
+    ]
+
+    numeric_transformer = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="median")),
+        ]
+    )
+
+    categorical_transformer = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="constant", fill_value="欠損")),
+            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+        ]
+    )
+
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", numeric_transformer, numeric_features),
+            ("cat", categorical_transformer, categorical_features),
+        ]
+    )
+
+    model = LogisticRegression(max_iter=1000)
+
+    pipeline = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("model", model),
+        ]
+    )
+
+    return pipeline, numeric_features, categorical_features
+
+
+def analyze(df):
+    X = df.drop(columns=["当落", "候補者氏名", "元現新"])
+    y = df["当落"]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.3,
+        random_state=42,
+        stratify=y
+    )
+
+    pipeline, numeric_features, categorical_features = build_pipeline()
+    pipeline.fit(X_train, y_train)
+
+    print("=== 分類性能 ===")
+    print(classification_report(y_test, pipeline.predict(X_test)))
+
+    # 特徴量名取得
+    ohe = (
+        pipeline
+        .named_steps["preprocessor"]
+        .named_transformers_["cat"]
+        .named_steps["onehot"]
+    )
+
+    feature_names = (
+        numeric_features
+        + list(ohe.get_feature_names_out(categorical_features))
+    )
+
+    coef = pipeline.named_steps["model"].coef_[0]
+    coef_df = (
+        pd.DataFrame({"feature": feature_names, "coefficient": coef})
+        .sort_values("coefficient", ascending=False)
+    )
+
+    coef_df.to_csv("rookie_win_factor_coefficients.csv", index=False)
+
+    print("\n=== 新人当選にプラスに働く要因（上位） ===")
+    print(coef_df.head(15))
+
+    print("\n=== 新人当選にマイナスに働く要因（下位） ===")
+    print(coef_df.tail(15))
+
+
+def main():
+    df = load_data()
+    df = preprocess(df)
+    analyze(df)
+
+
+if __name__ == "__main__":
+    main()
