@@ -8,13 +8,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from sklearn.impute import SimpleImputer
 
-
 def load_data():
     return pd.read_excel(
         "./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx",
         engine="openpyxl"
     )
-
 
 def preprocess(df):
     df = df[df["元現新"] == "新"].copy()
@@ -45,8 +43,6 @@ def preprocess(df):
         df[col] = df[col].astype(str).fillna("欠損")
 
     return df
-
-
 
 def build_pipeline():
     numeric_features = [
