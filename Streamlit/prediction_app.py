@@ -207,7 +207,7 @@ if page == "Candidate Prediction":
     )
 
     input_data["性別"] = st.selectbox(
-        "性別", sorted(df["性別"].dropna().unique())
+        "性別(0が男性、1が女性)", sorted(df["性別"].dropna().unique())
     )
 
     input_data["党派"] = st.selectbox(
