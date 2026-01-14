@@ -12,7 +12,10 @@ plt.rcParams["font.family"] = "MS Gothic"
 # ============================
 # データ読み込み
 # ============================
-df = pd.read_excel("./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx", engine="openpyxl")
+df = pd.read_excel(
+    "./Data/2025_upperhouse_election_constituency_system_cleaning.xlsx",
+    engine="openpyxl"
+)
 df.columns = df.columns.str.strip()
 
 rename_dict = {
@@ -33,7 +36,7 @@ df["当落"] = df["当落"].map({"当": 1, "落": 0})
 y = df["当落"]
 
 # ============================
-# 特徴量セット（議席数 → 都道府県）
+# 特徴量
 # ============================
 features = [
     "年齢", "性別", "衆参当選回数",
@@ -47,30 +50,39 @@ features = [
 X = df[features].copy()
 
 # ============================
-# CatBoost Encoding（カテゴリ列）
+# CatBoost Encoding 対象列
 # ============================
-cat_cols = ["党派", "元現新", "争点1位", "争点2位", "争点3位", "職業(分類)", "都道府県"]
+cat_cols = [
+    "党派", "元現新",
+    "争点1位", "争点2位", "争点3位",
+    "職業(分類)", "都道府県"
+]
 
-# 元のカテゴリ列を X に残しておく
+# 元列を X に追加
 for col in cat_cols:
     if col not in X.columns:
         X[col] = df[col]
 
+# ============================
+# CatBoost Encoding（OOF）
+# ============================
 cbe = CatBoostEncoder()
 kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
 X_cbe = np.zeros((len(X), len(cat_cols)))
+
 for tr_idx, va_idx in kf.split(X):
     X_tr, X_va = X.iloc[tr_idx], X.iloc[va_idx]
     y_tr = y.iloc[tr_idx]
+
     cbe.fit(X_tr[cat_cols], y_tr)
     X_cbe[va_idx, :] = cbe.transform(X_va[cat_cols]).values
 
-# 変換結果を新しい列として追加
+# エンコード結果を追加
 for i, col in enumerate(cat_cols):
     X[f"{col}_cbe"] = X_cbe[:, i]
 
-# 元の object 型列は削除（LightGBM は object 型を扱えない）
+# 元のカテゴリ列は削除
 X = X.drop(columns=cat_cols)
 
 # ============================
@@ -92,6 +104,7 @@ params = {
     "verbose": -1,
     "seed": 42
 }
+
 train_data = lgb.Dataset(X, y)
 
 model = lgb.train(
@@ -101,7 +114,7 @@ model = lgb.train(
 )
 
 # ============================
-# 学習データで予測
+# 予測
 # ============================
 y_pred_prob = model.predict(X)
 y_pred = (y_pred_prob >= 0.5).astype(int)
@@ -117,14 +130,32 @@ print(f"Recall   : {recall_score(y, y_pred):.3f}")
 print(f"F1-score : {f1_score(y, y_pred):.3f}")
 
 # ============================
-# 特徴量重要度
+# 特徴量重要度（_cbe なし・安全）
 # ============================
-lgb.plot_importance(model, figsize=(8, 10))
-plt.title("LightGBM Feature Importance")
+importances = model.feature_importance(importance_type="gain")
+feature_names = model.feature_name()
+
+# 表示用に _cbe を除去
+display_feature_names = [
+    f.replace("_cbe", "") if f.endswith("_cbe") else f
+    for f in feature_names
+]
+
+df_imp = pd.DataFrame({
+    "feature": display_feature_names,
+    "importance": importances
+}).sort_values("importance", ascending=False)
+
+# プロット
+plt.figure(figsize=(8, 10))
+plt.barh(df_imp["feature"], df_imp["importance"])
+plt.gca().invert_yaxis()
+plt.title("LightGBM Feature Importance (Gain)")
+plt.tight_layout()
 plt.show()
 
 # ============================
-# モデル保存
+# モデル保存（エラーなし）
 # ============================
 model_package = {
     "model": model,
