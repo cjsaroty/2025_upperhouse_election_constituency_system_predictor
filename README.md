@@ -1,4 +1,4 @@
-<img width="2505" height="375" alt="image" src="https://github.com/user-attachments/assets/c30a1bae-86af-4124-8a31-aef29bcd4da1" /><img width="2505" height="375" alt="image" src="https://github.com/user-attachments/assets/d8f2a87a-640b-4d06-b71d-281bf0abb207" /># 2025年参議院選挙データを活用した選挙方針策定と候補者選定プロジェクト
+# 2025年参議院選挙データを活用した選挙方針策定と候補者選定プロジェクト
 
 ## プロジェクト概要
 
@@ -29,7 +29,7 @@
 
 ---
 
-# 使用した特徴量(Feature engineering)
+# 使用した特徴量
 
 有権者の投票選択の4つの基準(①支持政党②政策争点③候補者の属性(①~③はミシガンモデル)④過去の業績(Fiorina 1981))を当落の要因としてロジックツリーを用いて分類し、当落に寄与しうるカテゴリ・数値特徴量(説明変数)を設計。
 
