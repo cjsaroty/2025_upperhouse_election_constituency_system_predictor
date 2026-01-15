@@ -130,7 +130,7 @@ print(f"Recall   : {recall_score(y, y_pred):.3f}")
 print(f"F1-score : {f1_score(y, y_pred):.3f}")
 
 # ============================
-# 特徴量重要度（_cbe なし・安全）
+# 特徴量重要度
 # ============================
 importances = model.feature_importance(importance_type="gain")
 feature_names = model.feature_name()

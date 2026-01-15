@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from scipy.stats import chi2_contingency  # 追加
+from scipy.stats import chi2_contingency  
 
 sns.set(font=["Meiryo"])
 
@@ -20,7 +20,7 @@ df["当選フラグ"] = df["当落"].isin(["当選", "当"]).astype(int)
 df = df[(df["年齢"] >= 30) & (df["年齢"] <= 90)]
 
 # ========================
-# ▼ カイ二乗検定
+# カイ二乗検定
 # 年齢を10歳刻みの年代に変換
 df["年代"] = (df["年齢"] // 10) * 10
 

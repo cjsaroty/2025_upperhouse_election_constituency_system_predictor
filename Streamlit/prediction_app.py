@@ -1,4 +1,3 @@
-# 当落予測ダッシュボード
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -25,20 +24,7 @@ plt.rcParams.update({
     "axes.unicode_minus": False
 })
 
-# SHAP はオプション（インストールされていない環境でも動くよう try/except）
-try:
-    import shap
-    SHAP_AVAILABLE = True
-except Exception:
-    SHAP_AVAILABLE = False
 
-plt.rcParams["font.family"] = "MS Gothic"
-sns.set_style("whitegrid")
-shap_option = st.sidebar.checkbox("SHAPを表示する")
-
-# ---------------------------
-# ユーティリティ
-# ---------------------------
 @st.cache_data
 def load_excel(uploaded):
     return pd.read_excel(uploaded, engine="openpyxl")
@@ -131,7 +117,7 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 # ---------------------------
 # UI設定
 # ---------------------------
-st.set_page_config(layout="wide", page_title="当落予測ダッシュボード (SHAP 統合)")
+st.set_page_config(layout="wide", page_title="当落予測ダッシュボード ")
 st.sidebar.title("ナビゲーション")
 page = st.sidebar.radio(
     "ページ選択",

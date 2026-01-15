@@ -6,17 +6,17 @@ from scipy.stats import chi2_contingency
 
 sns.set(font=["Meiryo"])
 
-# ▼ データ読み込み
+#  データ読み込み
 file_path = "Data/2025_upperhouse_election_constituency_system_cleaning.xlsx"
 df = pd.read_excel(file_path)
 
-# ▼ 当落を数値化（当選=1, 落選=0）
+#  当落を数値化（当選=1, 落選=0）
 df["当落フラグ"] = df["当落"].map({"当選": 1, "落選": 0, "当": 1, "落": 0})
 
-# ▼ 政府タイプ列名を設定
+#  政府タイプ列名を設定
 government_col = "政府規模"
 
-# ▼ カイ二乗検定
+#  カイ二乗検定
 # クロス集計表（政府タイプ × 当落）
 contingency = pd.crosstab(df[government_col], df["当落フラグ"])
 print("\n▼ クロス集計表（政府規模 × 当落）")
@@ -35,7 +35,7 @@ if p < alpha:
 else:
     print("→ 有意差なし（政府規模と当選は独立とみなせる）")
 
-# ▼ 政府規模ごとの当選確率
+# 政府規模ごとの当選確率
 win_rate_by_government = df.groupby(government_col)["当落フラグ"].mean().sort_index()
 
 # グラフ描画
